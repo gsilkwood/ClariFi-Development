@@ -1,0 +1,20 @@
+// ClariFi Database Schema
+// This is a starter schema - full schema will be developed by Database Architect Agent
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Placeholder model - to be expanded
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  role      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
