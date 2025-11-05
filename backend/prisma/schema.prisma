@@ -1,5 +1,5 @@
-// ClariFi Database Schema
-// This is a starter schema - full schema will be developed by Database Architect Agent
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
 
 generator client {
   provider = "prisma-client-js"
@@ -10,11 +10,450 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// Placeholder model - to be expanded
+// ============================================================================
+// USER MANAGEMENT & AUTHENTICATION
+// ============================================================================
+
+model UserRole {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique @db.VarChar(50)
+  description String?
+  permissions Json     @default("[]")
+  createdAt   DateTime @default(now())
+  users       User[]
+
+  @@map("user_roles")
+}
+
 model User {
+  id                  String              @id @default(cuid())
+  username            String              @unique @db.VarChar(100)
+  email               String              @unique @db.VarChar(255)
+  passwordHash        String              @db.VarChar(255)
+  firstName           String?             @db.VarChar(100)
+  lastName            String?             @db.VarChar(100)
+  roleId              Int
+  role                UserRole            @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  branchId            Int?
+  status              String              @default("active") @db.VarChar(20)
+  lastLogin           DateTime?
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+  sessions            UserSession[]
+  loansAsOfficer      LoanApplication[]   @relation("LoanOfficer")
+  tasks               WorkflowTask[]      @relation("AssignedTo")
+  documentsUploaded   Document[]          @relation("UploadedBy")
+  documentsVerified   Document[]          @relation("VerifiedBy")
+  notifications       Notification[]
+  activities          Activity[]
+  creditReportsRequested CreditReport[]
+  statusHistoryChanges LoanStatusHistory[]
+  configUpdates       SystemConfig[]
+
+  @@index([email])
+  @@index([username])
+  @@index([roleId])
+  @@index([status])
+  @@map("users")
+}
+
+model UserSession {
   id        String   @id @default(cuid())
-  email     String   @unique
-  role      String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String   @unique @db.VarChar(255)
+  ipAddress String?  @db.VarChar(45)
+  userAgent String?
+  loginAt   DateTime @default(now())
+  logoutAt  DateTime?
+  expiresAt DateTime
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("user_sessions")
+}
+
+// ============================================================================
+// BORROWER & CONTACT INFORMATION
+// ============================================================================
+
+model Borrower {
+  id                 String              @id @default(cuid())
+  email              String?             @unique @db.VarChar(255)
+  phone              String?             @db.VarChar(20)
+  firstName          String              @db.VarChar(100)
+  lastName           String              @db.VarChar(100)
+  dateOfBirth        DateTime?           @db.Date
+  ssnHash            String?             @unique @db.VarChar(255)
+  address            String?             @db.VarChar(255)
+  city               String?             @db.VarChar(100)
+  state              String?             @db.VarChar(2)
+  zip                String?             @db.VarChar(10)
+  citizenshipStatus  String?             @db.VarChar(50)
+  employmentStatus   String?             @db.VarChar(50)
+  employmentInfo     Json?
+  financialInfo      Json?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  loanApplications   LoanApplication[]   @relation("PrimaryBorrower")
+  coBorrowerLoans    LoanApplication[]   @relation("CoBorrower")
+  creditReports      CreditReport[]
+
+  @@index([email])
+  @@index([firstName, lastName])
+  @@map("borrowers")
+}
+
+// ============================================================================
+// LOAN PROGRAMS & CONFIGURATION
+// ============================================================================
+
+model LoanProgram {
+  id             Int               @id @default(autoincrement())
+  programCode    String            @unique @db.VarChar(50)
+  programName    String            @db.VarChar(255)
+  programCategory String           @db.VarChar(50)
+  description    String?
+  minAmount      Decimal?          @db.Decimal(15, 2)
+  maxAmount      Decimal?          @db.Decimal(15, 2)
+  minTermMonths  Int?
+  maxTermMonths  Int?
+  isActive       Boolean           @default(true)
+  requirements   Json?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  loanApplications LoanApplication[]
+
+  @@index([isActive])
+  @@index([programCategory])
+  @@map("loan_programs")
+}
+
+// ============================================================================
+// LOAN APPLICATIONS (CORE TABLE)
+// ============================================================================
+
+model LoanApplication {
+  id                      String            @id @default(cuid())
+  loanNumber              String            @unique @db.VarChar(50)
+  programId               Int
+  program                 LoanProgram       @relation(fields: [programId], references: [id], onDelete: Restrict)
+  loanOfficerId           String
+  loanOfficer             User              @relation("LoanOfficer", fields: [loanOfficerId], references: [id], onDelete: Restrict)
+  borrowerId              String
+  borrower                Borrower          @relation("PrimaryBorrower", fields: [borrowerId], references: [id], onDelete: Cascade)
+  coBorrowerId            String?
+  coBorrower              Borrower?         @relation("CoBorrower", fields: [coBorrowerId], references: [id], onDelete: SetNull)
+
+  // Loan Details
+  loanAmount              Decimal           @db.Decimal(15, 2)
+  loanTermMonths          Int
+  interestRate            Decimal?          @db.Decimal(5, 3)
+  purpose                 String?           @db.VarChar(255)
+  transactionType         String?           @db.VarChar(50)
+
+  // Property Information
+  propertyAddress         String?           @db.VarChar(255)
+  propertyCity            String?           @db.VarChar(100)
+  propertyState           String?           @db.VarChar(2)
+  propertyZip             String?           @db.VarChar(10)
+  propertyType            String?           @db.VarChar(50)
+  propertyValue           Decimal?          @db.Decimal(15, 2)
+
+  // Status & Workflow
+  status                  String            @default("LEAD") @db.VarChar(50)
+  subStatus               String?           @db.VarChar(100)
+
+  // Key Dates
+  createdAt               DateTime          @default(now())
+  updatedAt               DateTime          @updatedAt
+  submittedAt             DateTime?
+  approvedAt              DateTime?
+  closedAt                DateTime?
+  fundedAt                DateTime?
+
+  // Financial Assessment
+  requestedCreditReport   Boolean           @default(false)
+  creditScore             Int?
+  estimatedMonthlyPayment Decimal?          @db.Decimal(12, 2)
+
+  // Relations
+  statusHistory           LoanStatusHistory[]
+  documents               Document[]
+  tasks                   WorkflowTask[]
+  notifications           Notification[]
+  activities              Activity[]
+  creditReports           CreditReport[]
+  integrationLogs         IntegrationLog[]
+
+  @@index([loanNumber])
+  @@index([status, loanOfficerId, updatedAt])
+  @@index([borrowerId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([programId])
+  @@map("loan_applications")
+}
+
+// ============================================================================
+// LOAN STATUS HISTORY (AUDIT TRAIL)
+// ============================================================================
+
+model LoanStatusHistory {
+  id            String          @id @default(cuid())
+  loanId        String
+  loan          LoanApplication @relation(fields: [loanId], references: [id], onDelete: Cascade)
+  fromStatus    String?         @db.VarChar(50)
+  toStatus      String          @db.VarChar(50)
+  fromSubStatus String?         @db.VarChar(100)
+  toSubStatus   String?         @db.VarChar(100)
+  changedById   String
+  changedBy     User            @relation(fields: [changedById], references: [id], onDelete: Restrict)
+  reason        String?
+  changedAt     DateTime        @default(now())
+
+  @@index([loanId, changedAt])
+  @@index([changedById])
+  @@index([changedAt])
+  @@map("loan_status_history")
+}
+
+// ============================================================================
+// DOCUMENT MANAGEMENT
+// ============================================================================
+
+model Document {
+  id                  String          @id @default(cuid())
+  loanId              String
+  loan                LoanApplication @relation(fields: [loanId], references: [id], onDelete: Cascade)
+  documentType        String          @db.VarChar(100)
+  documentName        String?         @db.VarChar(255)
+  filePath            String?         @db.VarChar(500)
+  fileSize            BigInt?
+  mimeType            String?         @db.VarChar(100)
+
+  // Document Status Tracking
+  isRequired          Boolean         @default(false)
+  isReceived          Boolean         @default(false)
+  extractionStatus    String          @default("PENDING") @db.VarChar(50)
+  verificationStatus  String          @default("PENDING") @db.VarChar(50)
+
+  // OCR & Extraction Data
+  ocrData             Json?
+
+  // Upload & Verification Tracking
+  uploadedById        String?
+  uploadedBy          User?           @relation("UploadedBy", fields: [uploadedById], references: [id], onDelete: SetNull)
+  uploadedAt          DateTime?
+  verifiedById        String?
+  verifiedBy          User?           @relation("VerifiedBy", fields: [verifiedById], references: [id], onDelete: SetNull)
+  verifiedAt          DateTime?
+
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+
+  @@index([loanId, documentType])
+  @@index([verificationStatus])
+  @@index([uploadedAt])
+  @@index([extractionStatus, loanId])
+  @@map("documents")
+}
+
+// ============================================================================
+// WORKFLOW TASKS & AUTOMATION
+// ============================================================================
+
+model WorkflowTask {
+  id                   String          @id @default(cuid())
+  loanId               String
+  loan                 LoanApplication @relation(fields: [loanId], references: [id], onDelete: Cascade)
+  taskType             String          @db.VarChar(100)
+  taskTitle            String?         @db.VarChar(255)
+  taskDescription      String?
+
+  // Assignment & Status
+  assignedToId         String?
+  assignedTo           User?           @relation("AssignedTo", fields: [assignedToId], references: [id], onDelete: SetNull)
+  status               String          @default("PENDING") @db.VarChar(50)
+  priority             String          @default("NORMAL") @db.VarChar(20)
+
+  // Dates
+  dueDate              DateTime
+  createdAt            DateTime        @default(now())
+  completedAt          DateTime?
+
+  // Automation Fields
+  isAutomated          Boolean         @default(false)
+  automationMetadata   Json?
+
+  @@index([loanId, status])
+  @@index([dueDate])
+  @@index([assignedToId, status])
+  @@map("workflow_tasks")
+}
+
+// ============================================================================
+// NOTIFICATIONS & COMMUNICATION
+// ============================================================================
+
+model Notification {
+  id                  String          @id @default(cuid())
+  loanId              String
+  loan                LoanApplication @relation(fields: [loanId], references: [id], onDelete: Cascade)
+  userId              String
+  user                User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  notificationType    String          @db.VarChar(100)
+  subject             String?         @db.VarChar(255)
+  body                String?
+
+  // Status Tracking
+  status              String          @default("PENDING") @db.VarChar(50)
+  sentAt              DateTime?
+  openedAt            DateTime?
+  clickedAt           DateTime?
+
+  // Retry & Error Handling
+  retryCount          Int             @default(0)
+  lastError           String?
+
+  createdAt           DateTime        @default(now())
+
+  @@index([userId, createdAt])
+  @@index([loanId, createdAt])
+  @@index([status])
+  @@map("notifications")
+}
+
+// ============================================================================
+// ACTIVITY LOG & AUDIT TRAIL
+// ============================================================================
+
+model Activity {
+  id                  String          @id @default(cuid())
+  loanId              String?
+  loan                LoanApplication? @relation(fields: [loanId], references: [id], onDelete: Cascade)
+  userId              String
+  user                User            @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  action              String          @db.VarChar(100)
+  description         String?
+
+  // Context Information
+  resourceType        String?         @db.VarChar(100)
+  resourceId          String?         @db.VarChar(255)
+  oldValues           Json?
+  newValues           Json?
+
+  // Request Context
+  ipAddress           String?         @db.VarChar(45)
+  userAgent           String?
+
+  createdAt           DateTime        @default(now())
+
+  @@index([loanId, createdAt])
+  @@index([userId, createdAt])
+  @@index([action, createdAt])
+  @@index([createdAt])
+  @@map("activities")
+}
+
+// ============================================================================
+// CREDIT BUREAU INTEGRATION
+// ============================================================================
+
+model CreditReport {
+  id              String          @id @default(cuid())
+  borrowerId      String
+  borrower        Borrower        @relation(fields: [borrowerId], references: [id], onDelete: Cascade)
+  loanId          String
+  loan            LoanApplication @relation(fields: [loanId], references: [id], onDelete: Cascade)
+
+  provider        String          @db.VarChar(100)
+  creditScore     Int?
+  triMergeScore   Int?
+
+  // Report Data
+  reportData      Json?
+
+  // Dates
+  requestedAt     DateTime
+  receivedAt      DateTime?
+  expiresAt       DateTime?
+
+  requestedById   String?
+  requestedBy     User?           @relation(fields: [requestedById], references: [id], onDelete: SetNull)
+
+  createdAt       DateTime        @default(now())
+
+  @@index([borrowerId, requestedAt])
+  @@index([loanId])
+  @@map("credit_reports")
+}
+
+// ============================================================================
+// THIRD-PARTY INTEGRATIONS & WEBHOOKS
+// ============================================================================
+
+model IntegrationLog {
+  id              String          @id @default(cuid())
+  loanId          String?
+  loan            LoanApplication? @relation(fields: [loanId], references: [id], onDelete: Cascade)
+
+  integrationType String          @db.VarChar(100)
+  externalId      String?         @db.VarChar(255)
+  status          String?         @db.VarChar(50)
+
+  requestBody     Json?
+  responseBody    Json?
+  errorMessage    String?
+
+  retryCount      Int             @default(0)
+  nextRetryAt     DateTime?
+
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  @@index([loanId, createdAt])
+  @@index([status, createdAt])
+  @@index([integrationType, createdAt])
+  @@map("integration_logs")
+}
+
+model WebhookEvent {
+  id              String          @id @default(cuid())
+  source          String          @db.VarChar(100)
+  eventType       String          @db.VarChar(100)
+
+  payload         Json
+  externalEventId String?         @unique @db.VarChar(255)
+
+  status          String          @default("PENDING") @db.VarChar(50)
+  processedAt     DateTime?
+  retryCount      Int             @default(0)
+  lastError       String?
+
+  createdAt       DateTime        @default(now())
+
+  @@index([source, createdAt])
+  @@index([status, createdAt])
+  @@map("webhook_events")
+}
+
+// ============================================================================
+// SYSTEM CONFIGURATION & SETTINGS
+// ============================================================================
+
+model SystemConfig {
+  id              Int             @id @default(autoincrement())
+  configKey       String          @unique @db.VarChar(255)
+  configValue     Json?
+  description     String?
+
+  updatedById     String?
+  updatedBy       User?           @relation(fields: [updatedById], references: [id], onDelete: SetNull)
+  updatedAt       DateTime        @default(now()) @updatedAt
+
+  @@index([configKey])
+  @@map("system_config")
 }
