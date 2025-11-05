@@ -17,6 +17,10 @@ describe('Auth Routes Integration', () => {
       res.json({ status: 'ok' });
     });
     app.use('/api', routes);
+    // 404 fallback to match server behavior
+    app.use('*', (_req, res) => {
+      res.status(404).json({ error: 'Route not found' });
+    });
     app.use(errorHandler);
   });
 
@@ -30,11 +34,12 @@ describe('Auth Routes Integration', () => {
 
   describe('POST /api/auth/register', () => {
     it('should register a new user with 201 status', async () => {
+      const unique = Date.now();
       const response = await request(app)
         .post('/api/auth/register')
         .send({
-          email: 'newuser@example.com',
-          username: 'newuser',
+          email: `newuser_${unique}@example.com`,
+          username: `newuser_${unique}`,
           password: 'SecurePass123!',
         });
 

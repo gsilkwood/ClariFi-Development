@@ -1,4 +1,15 @@
 import { PrismaClient } from '@prisma/client';
+import dotenv from 'dotenv';
+import path from 'path';
+
+// Ensure test env is loaded and DATABASE_URL points to test DB
+if (process.env.NODE_ENV === 'test') {
+  // Load .env.test explicitly (non-fatal if missing)
+  dotenv.config({ path: path.resolve(__dirname, '../../.env.test') });
+  if (!process.env.DATABASE_URL || /clarifi_dev/.test(process.env.DATABASE_URL)) {
+    process.env.DATABASE_URL = process.env.DATABASE_URL || 'postgresql://gsilkwood@localhost/clarifi_test';
+  }
+}
 
 let prisma: PrismaClient;
 

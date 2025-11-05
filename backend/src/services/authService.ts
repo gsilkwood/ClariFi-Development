@@ -3,7 +3,13 @@ import { JWTPayload, AuthRequest, RegisterRequest, TokenResponse } from '../type
 import { JWTService } from '../utils/jwt';
 import { PasswordService } from '../utils/password';
 
-const prisma = new PrismaClient();
+const prisma = new PrismaClient({
+  datasources: {
+    db: {
+      url: process.env.DATABASE_URL,
+    },
+  },
+});
 
 export class AuthService {
   /**
@@ -77,6 +83,16 @@ export class AuthService {
 
     const accessToken = JWTService.generateAccessToken(jwtPayload);
     const refreshToken = JWTService.generateRefreshToken(jwtPayload);
+
+    // Store refresh session on registration to support immediate refresh
+    const tokenHash = await PasswordService.hash(refreshToken);
+    await prisma.userSession.create({
+      data: {
+        userId: user.id,
+        tokenHash,
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      },
+    });
 
     return {
       user: {
