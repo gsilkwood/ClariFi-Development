@@ -5,6 +5,7 @@ export interface JWTPayload {
   email: string;
   username: string;
   roleId: number;
+  role: string; // Role name (e.g., 'BORROWER', 'LOAN_OFFICER')
   branchId?: number;
   iat?: number;
   exp?: number;

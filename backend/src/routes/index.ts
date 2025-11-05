@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import authRoutes from './authRoutes';
 import loanRoutes from './loanRoutes';
+import documentRoutes from './documentRoutes';
 
 const router = Router();
 
@@ -10,8 +11,7 @@ router.use('/auth', authRoutes);
 // Mount loan routes at /api/loans
 router.use('/loans', loanRoutes);
 
-// Future routes will be added here:
-// router.use('/documents', documentRoutes);
-// etc.
+// Mount document routes (includes /loans/:id/documents and /documents/:docId)
+router.use('/', documentRoutes);
 
 export default router;

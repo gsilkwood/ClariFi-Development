@@ -7,6 +7,7 @@ describe('JWTService', () => {
     email: 'test@example.com',
     username: 'testuser',
     roleId: 1,
+    role: 'BORROWER',
   };
 
   describe('generateAccessToken', () => {

@@ -78,6 +78,7 @@ export class AuthService {
       email: user.email,
       username: user.username,
       roleId: user.roleId,
+      role: user.role.name,
       branchId: user.branchId || undefined,
     };
 
@@ -154,6 +155,7 @@ export class AuthService {
       email: user.email,
       username: user.username,
       roleId: user.roleId,
+      role: user.role.name,
       branchId: user.branchId || undefined,
     };
 
@@ -212,6 +214,7 @@ export class AuthService {
     // Get user
     const user = await prisma.user.findUnique({
       where: { id: validation.payload.userId },
+      include: { role: true },
     });
 
     if (!user || user.status !== 'active') {
@@ -224,6 +227,7 @@ export class AuthService {
       email: user.email,
       username: user.username,
       roleId: user.roleId,
+      role: user.role.name,
       branchId: user.branchId || undefined,
     };
 
