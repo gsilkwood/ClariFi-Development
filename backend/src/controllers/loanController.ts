@@ -6,9 +6,9 @@ export class LoanController {
   async createLoan(req: Request, res: Response): Promise<void> {
     try {
       const authReq = req as AuthenticatedRequest;
-      const { amount, term, purpose, employmentStatus, employerName, annualIncome, additionalIncome } = req.body;
+      const { amount, term, purpose, employmentStatus, employerName, annualIncome, additionalIncome, borrowerEmail, firstName, lastName } = req.body;
 
-      if (!amount || !purpose || !employmentStatus || !annualIncome) {
+      if (!amount || !purpose || !employmentStatus || !annualIncome || !borrowerEmail) {
         res.status(400).json({ error: 'Missing required fields' });
         return;
       }
@@ -21,6 +21,9 @@ export class LoanController {
         employerName,
         annualIncome,
         additionalIncome,
+        borrowerEmail,
+        firstName,
+        lastName,
       });
 
       res.status(201).json(loan);
@@ -32,7 +35,7 @@ export class LoanController {
   async getLoanApplications(req: Request, res: Response): Promise<void> {
     try {
       const authReq = req as AuthenticatedRequest;
-      const loans = await LoanService.getLoanApplications(authReq.user!.userId);
+      const loans = await LoanService.getLoanApplicationsByUser(authReq.user!.userId);
       res.json(loans);
     } catch (error: any) {
       res.status(500).json({ error: error.message });

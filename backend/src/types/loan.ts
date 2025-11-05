@@ -1,11 +1,12 @@
 export enum LoanStatus {
-  DRAFT = 'draft',
-  SUBMITTED = 'submitted',
-  UNDER_REVIEW = 'under_review',
-  APPROVED = 'approved',
-  REJECTED = 'rejected',
-  FUNDED = 'funded',
-  CLOSED = 'closed',
+  LEAD = 'LEAD',
+  DRAFT = 'DRAFT',
+  SUBMITTED = 'SUBMITTED',
+  UNDER_REVIEW = 'UNDER_REVIEW',
+  APPROVED = 'APPROVED',
+  REJECTED = 'REJECTED',
+  FUNDED = 'FUNDED',
+  CLOSED = 'CLOSED',
 }
 
 export interface CreateLoanRequest {
@@ -16,6 +17,9 @@ export interface CreateLoanRequest {
   employerName?: string;
   annualIncome: number;
   additionalIncome?: number;
+  borrowerEmail: string;
+  firstName?: string;
+  lastName?: string;
 }
 
 export interface UpdateLoanRequest {

@@ -1,13 +1,15 @@
 import { PrismaClient } from '@prisma/client';
-import { CreateLoanRequest, UpdateLoanRequest, LoanStatus } from '../types/loan';
+import { CreateLoanRequest, UpdateLoanRequest } from '../types/loan';
 
 const prisma = new PrismaClient();
 
 export class LoanService {
   /**
-   * Create a new loan application
+   * Create a new loan application (simplified - using Borrower relationship)
+   * NOTE: The full schema requires programId, borrowerId, loanOfficerId
+   * This is a simplified implementation for MVP
    */
-  static async createLoanApplication(userId: string, data: CreateLoanRequest) {
+  static async createLoanApplication(_userId: string, data: CreateLoanRequest) {
     // Validate loan amount
     if (data.amount < 1000 || data.amount > 1000000) {
       throw new Error('Loan amount must be between $1,000 and $1,000,000');
@@ -24,20 +26,54 @@ export class LoanService {
       throw new Error('Annual income must be non-negative');
     }
 
+    // Get or create a default borrower for this user
+    const borrower = await prisma.borrower.upsert({
+      where: { email: data.borrowerEmail },
+      update: {},
+      create: {
+        email: data.borrowerEmail,
+        firstName: data.firstName || 'Unknown',
+        lastName: data.lastName || 'User',
+        employmentStatus: data.employmentStatus,
+        employmentInfo: {
+          employerName: data.employerName,
+          annualIncome: data.annualIncome,
+          additionalIncome: data.additionalIncome || 0,
+        },
+      },
+    });
+
+    // Get default loan program and loan officer (for MVP)
+    const program = await prisma.loanProgram.findFirst({
+      where: { isActive: true },
+    });
+
+    if (!program) {
+      throw new Error('No active loan programs available');
+    }
+
+    const loanOfficer = await prisma.user.findFirst({
+      where: { role: { name: 'Loan Officer' } },
+    });
+
+    if (!loanOfficer) {
+      throw new Error('No loan officers available');
+    }
+
+    // Create loan with required fields
     const application = await prisma.loanApplication.create({
       data: {
-        userId,
-        amount: data.amount,
-        term: data.term,
+        loanNumber: `LOAN-${Date.now()}`,
+        programId: program.id,
+        loanOfficerId: loanOfficer.id,
+        borrowerId: borrower.id,
+        loanAmount: new (require('decimal.js'))(data.amount),
+        loanTermMonths: data.term,
         purpose: data.purpose,
-        employmentStatus: data.employmentStatus,
-        employerName: data.employerName,
-        annualIncome: data.annualIncome,
-        additionalIncome: data.additionalIncome || 0,
-        status: 'draft',
+        status: 'LEAD',
       },
       include: {
-        user: { select: { email: true, username: true } },
+        borrower: { select: { email: true, firstName: true, lastName: true } },
       },
     });
 
@@ -45,11 +81,17 @@ export class LoanService {
   }
 
   /**
-   * Get all applications for a user
+   * Get all applications for a borrower
    */
-  static async getLoanApplications(userId: string) {
+  static async getLoanApplicationsByUser(userId: string) {
+    // First find borrower by email (need user email)
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new Error('User not found');
+
     const applications = await prisma.loanApplication.findMany({
-      where: { userId },
+      where: {
+        borrower: { email: user.email },
+      },
       orderBy: { createdAt: 'desc' },
     });
 
@@ -63,8 +105,9 @@ export class LoanService {
     const application = await prisma.loanApplication.findUnique({
       where: { id: loanId },
       include: {
-        user: { select: { email: true, username: true } },
-        statusHistory: { orderBy: { createdAt: 'asc' } },
+        borrower: { select: { email: true, firstName: true, lastName: true } },
+        statusHistory: { orderBy: { changedAt: 'asc' } },
+        loanOfficer: { select: { username: true, email: true } },
       },
     });
 
@@ -73,15 +116,18 @@ export class LoanService {
     }
 
     // Check ownership if userId provided
-    if (userId && application.userId !== userId) {
-      throw new Error('Unauthorized: You do not own this loan application');
+    if (userId) {
+      const user = await prisma.user.findUnique({ where: { id: userId } });
+      if (!user || application.borrower.email !== user.email) {
+        throw new Error('Unauthorized: You do not own this loan application');
+      }
     }
 
     return application;
   }
 
   /**
-   * Update a loan application (only in draft status)
+   * Update a loan application
    */
   static async updateLoanApplication(
     loanId: string,
@@ -90,7 +136,9 @@ export class LoanService {
   ) {
     const application = await this.getLoanApplication(loanId, userId);
 
-    if (application.status !== 'draft') {
+    // Only allow updates in certain statuses
+    const updatableStatuses = ['LEAD', 'DRAFT'];
+    if (!updatableStatuses.includes(application.status)) {
       throw new Error(`Cannot update loan in ${application.status} status`);
     }
 
@@ -110,13 +158,9 @@ export class LoanService {
     const updated = await prisma.loanApplication.update({
       where: { id: loanId },
       data: {
-        amount: updates.amount,
-        term: updates.term,
+        loanAmount: updates.amount ? new (require('decimal.js'))(updates.amount) : undefined,
+        loanTermMonths: updates.term,
         purpose: updates.purpose,
-        employmentStatus: updates.employmentStatus,
-        employerName: updates.employerName,
-        annualIncome: updates.annualIncome,
-        additionalIncome: updates.additionalIncome,
       },
     });
 
@@ -124,12 +168,15 @@ export class LoanService {
   }
 
   /**
-   * Submit application for review (transition to submitted)
+   * Submit application for review
    */
   static async submitForReview(loanId: string, userId: string) {
     const application = await this.getLoanApplication(loanId, userId);
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new Error('User not found');
 
-    if (application.status !== 'draft') {
+    const updatableStatuses = ['LEAD', 'DRAFT'];
+    if (!updatableStatuses.includes(application.status)) {
       throw new Error(`Cannot submit loan in ${application.status} status`);
     }
 
@@ -137,15 +184,16 @@ export class LoanService {
     await prisma.loanStatusHistory.create({
       data: {
         loanId,
-        fromStatus: 'draft',
-        toStatus: 'submitted',
+        fromStatus: application.status,
+        toStatus: 'SUBMITTED',
+        changedById: userId,
       },
     });
 
     // Update application status
     const updated = await prisma.loanApplication.update({
       where: { id: loanId },
-      data: { status: 'submitted' },
+      data: { status: 'SUBMITTED' },
     });
 
     return updated;
@@ -159,7 +207,7 @@ export class LoanService {
 
     const history = await prisma.loanStatusHistory.findMany({
       where: { loanId },
-      orderBy: { createdAt: 'asc' },
+      orderBy: { changedAt: 'asc' },
     });
 
     return {
@@ -178,7 +226,7 @@ export class LoanService {
 
     const history = await prisma.loanStatusHistory.findMany({
       where: { loanId },
-      orderBy: { createdAt: 'asc' },
+      orderBy: { changedAt: 'asc' },
     });
 
     return history;
@@ -190,7 +238,8 @@ export class LoanService {
   static async deleteLoanApplication(loanId: string, userId: string) {
     const application = await this.getLoanApplication(loanId, userId);
 
-    if (application.status !== 'draft') {
+    const deletableStatuses = ['LEAD', 'DRAFT'];
+    if (!deletableStatuses.includes(application.status)) {
       throw new Error(`Cannot delete loan in ${application.status} status`);
     }
 
