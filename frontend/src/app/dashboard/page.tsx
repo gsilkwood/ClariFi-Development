@@ -21,14 +21,6 @@ export default function DashboardPage() {
     }
   }, [isAuthenticated, isLoading, router]);
 
-  const handleLogout = async () => {
-    try {
-      await logout();
-      router.push('/login');
-    } catch (err) {
-      console.error('Logout failed:', err);
-    }
-  };
 
   if (isLoading || !isAuthenticated || !user) {
     return (
