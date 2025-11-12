@@ -1,14 +1,7 @@
-import { PrismaClient, Document } from '@prisma/client';
+import { Document } from '@prisma/client';
 import fs from 'fs/promises';
 import path from 'path';
-
-const prisma = new PrismaClient({
-  datasources: {
-    db: {
-      url: process.env.DATABASE_URL || 'postgresql://gsilkwood@localhost/clarifi',
-    },
-  },
-});
+import { prisma } from '../lib/prisma';
 
 export interface UploadDocumentRequest {
   loanId: string;

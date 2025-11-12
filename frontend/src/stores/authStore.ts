@@ -16,7 +16,6 @@ export interface AuthStore {
   isLoading: boolean;
   error: string | null;
   accessToken: string | null;
-  refreshToken: string | null;
 
   // Actions
   register: (data: RegisterRequest) => Promise<AuthResponse>;
@@ -33,7 +32,6 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
   isLoading: false,
   error: null,
   accessToken: null,
-  refreshToken: null,
 
   register: async (data: RegisterRequest) => {
     set({ isLoading: true, error: null });
@@ -43,7 +41,6 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
         user: response.user,
         isAuthenticated: true,
         accessToken: response.tokens.accessToken,
-        refreshToken: response.tokens.refreshToken,
         isLoading: false,
       });
       if (typeof window !== 'undefined') {
@@ -65,7 +62,6 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
         user: response.user,
         isAuthenticated: true,
         accessToken: response.tokens.accessToken,
-        refreshToken: response.tokens.refreshToken,
         isLoading: false,
       });
       if (typeof window !== 'undefined') {
@@ -87,7 +83,6 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
         user: null,
         isAuthenticated: false,
         accessToken: null,
-        refreshToken: null,
         isLoading: false,
         error: null,
       });
@@ -109,7 +104,6 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     if (typeof window === 'undefined') return;
     
     const accessToken = localStorage.getItem('accessToken');
-    const refreshToken = localStorage.getItem('refreshToken');
     const userStr = localStorage.getItem('user');
     
     if (accessToken && userStr) {
@@ -119,7 +113,6 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
           user,
           isAuthenticated: true,
           accessToken,
-          refreshToken,
         });
       } catch (err) {
         localStorage.removeItem('user');

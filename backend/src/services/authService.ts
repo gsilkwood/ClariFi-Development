@@ -1,15 +1,7 @@
-import { PrismaClient } from '@prisma/client';
 import { JWTPayload, AuthRequest, RegisterRequest, TokenResponse } from '../types/auth';
 import { JWTService } from '../utils/jwt';
 import { PasswordService } from '../utils/password';
-
-const prisma = new PrismaClient({
-  datasources: {
-    db: {
-      url: process.env.DATABASE_URL,
-    },
-  },
-});
+import { prisma } from '../lib/prisma';
 
 export class AuthService {
   /**
