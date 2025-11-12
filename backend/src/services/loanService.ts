@@ -1,13 +1,5 @@
-import { PrismaClient } from '@prisma/client';
 import { CreateLoanRequest, UpdateLoanRequest } from '../types/loan';
-
-const prisma = new PrismaClient({
-  datasources: {
-    db: {
-      url: process.env.DATABASE_URL,
-    },
-  },
-});
+import { prisma } from '../lib/prisma';
 
 export class LoanService {
   /**
