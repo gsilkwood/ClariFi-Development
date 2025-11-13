@@ -54,4 +54,6 @@ temp/
 *.tmp
 
 # Prisma
-backend/prisma/migrations/*.sql
+# Allow migration files to be committed (remove the *.sql exclusion)
+backend/prisma/dev.db
+backend/prisma/.env
