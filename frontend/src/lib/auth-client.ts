@@ -26,14 +26,12 @@ export interface AuthResponse {
   };
   tokens: {
     accessToken: string;
-    refreshToken: string;
     expiresIn: number;
   };
 }
 
 export interface TokenResponse {
   accessToken: string;
-  refreshToken: string;
   expiresIn: number;
 }
 
@@ -48,10 +46,11 @@ class AuthClient {
       headers: {
         'Content-Type': 'application/json',
       },
+      withCredentials: true, // Important for httpOnly cookies
     });
 
-    // Load tokens from localStorage
-    this.loadTokens();
+    // Load access token from localStorage (refresh token will be in httpOnly cookie)
+    this.loadAccessToken();
 
     // Add request interceptor to attach token
     this.client.interceptors.request.use((config) => {
@@ -65,10 +64,10 @@ class AuthClient {
     this.client.interceptors.response.use(
       (response) => response,
       async (error) => {
-        if (error.response?.status === 401 && this.refreshToken) {
+        if (error.response?.status === 401) {
           try {
             const newTokens = await this.refreshTokens();
-            this.saveTokens(newTokens);
+            this.saveAccessToken(newTokens.accessToken);
             // Retry original request
             const config = error.config;
             config.headers.Authorization = `Bearer ${newTokens.accessToken}`;
@@ -85,13 +84,13 @@ class AuthClient {
 
   async register(data: RegisterRequest): Promise<AuthResponse> {
     const response = await this.client.post<AuthResponse>('/auth/register', data);
-    this.saveTokens(response.data.tokens);
+    this.saveAccessToken(response.data.tokens.accessToken);
     return response.data;
   }
 
   async login(data: LoginRequest): Promise<AuthResponse> {
     const response = await this.client.post<AuthResponse>('/auth/login', data);
-    this.saveTokens(response.data.tokens);
+    this.saveAccessToken(response.data.tokens.accessToken);
     return response.data;
   }
 
@@ -104,29 +103,21 @@ class AuthClient {
   }
 
   async refreshTokens(): Promise<TokenResponse> {
-    if (!this.refreshToken) {
-      throw new Error('No refresh token available');
-    }
-    const response = await this.client.post<TokenResponse>('/auth/refresh', {
-      refreshToken: this.refreshToken,
-    });
+    // Refresh token is in httpOnly cookie, no need to send it
+    const response = await this.client.post<TokenResponse>('/auth/refresh');
     return response.data;
   }
 
-  private saveTokens(tokens: TokenResponse): void {
-    this.accessToken = tokens.accessToken;
-    this.refreshToken = tokens.refreshToken;
+  private saveAccessToken(accessToken: string): void {
+    this.accessToken = accessToken;
     if (typeof window !== 'undefined') {
-      localStorage.setItem('accessToken', tokens.accessToken);
-      localStorage.setItem('refreshToken', tokens.refreshToken);
-      localStorage.setItem('tokenExpiry', (Date.now() + tokens.expiresIn * 1000).toString());
+      localStorage.setItem('accessToken', accessToken);
     }
   }
 
-  private loadTokens(): void {
+  private loadAccessToken(): void {
     if (typeof window !== 'undefined') {
       this.accessToken = localStorage.getItem('accessToken');
-      this.refreshToken = localStorage.getItem('refreshToken');
     }
   }
 
@@ -135,7 +126,6 @@ class AuthClient {
     this.refreshToken = null;
     if (typeof window !== 'undefined') {
       localStorage.removeItem('accessToken');
-      localStorage.removeItem('refreshToken');
       localStorage.removeItem('tokenExpiry');
       localStorage.removeItem('user');
     }
