@@ -52,17 +52,17 @@ clarifi-development/
 
 ## 🤖 Warp Multi-Agent Development
 
-This project is optimized for development with Warp IDE's agentic capabilities:
+This project is optimized for MULTI-AGENT ORCHESTRATION WITH AUTOMATED DEVELOPMENT WORKFLOWS
 
 - **WARP.md files** provide agent-specific guidance
-- **.agent-context/** enables agent coordination
+- **.agent-context/** enables agent coordination, communication, and tracking task completion
 - **Git repository** is indexed for context-aware assistance
 
 ### For Agents
 1. Review `WARP.md` in project root
 2. Read role-specific WARP.md (frontend/backend/database)
 3. Check `.agent-context/task-board.md` for assignments
-4. Update your status in `.agent-context/status/`
+4. After each completed task, update the task board at `.agent-context/task-board.md` and update your status in `.agent-context/status/`
 
 ## 🎯 Key Features
 
@@ -111,4 +111,4 @@ Proprietary - Clarity Financial
 
 ---
 
-**Built with Warp Multi-Agent Development Environment**
+**Built with Agentic Development Environment, with Multi-Agent Orchestration**
