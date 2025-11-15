@@ -20,6 +20,7 @@ export interface CreateLoanRequest {
   borrowerEmail: string;
   firstName?: string;
   lastName?: string;
+  loanProgramId?: number;
 }
 
 export interface UpdateLoanRequest {
