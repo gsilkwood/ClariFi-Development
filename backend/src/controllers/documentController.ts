@@ -1,5 +1,8 @@
 import { Request, Response } from 'express';
 import { documentService } from '../services/documentService';
+import { UploadDocumentSchema, VerifyDocumentSchema } from '../utils/validation';
+import { ValidationError, AuthenticationError, NotFoundError } from '../utils/errors';
+import logger from '../lib/logger';
 
 // Extend Express Request type to include user from JWT middleware
 declare global {
@@ -14,61 +17,55 @@ declare global {
   }
 }
 
-const DOCUMENT_TYPES = [
-  'INCOME_STATEMENT',
-  'TAX_RETURN',
-  'BANK_STATEMENT',
-  'IDENTIFICATION',
-  'PROOF_OF_ADDRESS',
-  'PROPERTY_APPRAISAL',
-  'OTHER',
-];
-
-const VERIFICATION_STATUSES = ['PENDING', 'VERIFIED', 'REJECTED', 'NEEDS_REVIEW'];
-
 export const documentController = {
   /**
    * POST /api/loans/:id/documents
    */
   async uploadDocument(req: Request, res: Response): Promise<void> {
+    if (!req.file) {
+      throw new ValidationError('No file uploaded');
+    }
+
+    const loanId = req.params.id;
+    const { documentType, documentName, isRequired } = req.body;
+    const uploadedById = req.user?.userId;
+
+    if (!uploadedById) {
+      throw new AuthenticationError('Unauthorized');
+    }
+
+    const validationResult = UploadDocumentSchema.safeParse({
+      documentType,
+      documentName,
+      isRequired,
+    });
+
+    if (!validationResult.success) {
+      throw new ValidationError('Document upload validation failed',
+        validationResult.error.flatten().fieldErrors as Record<string, any>);
+    }
+
     try {
-      if (!req.file) {
-        res.status(400).json({ error: 'No file uploaded' });
-        return;
-      }
-
-      const loanId = req.params.id;
-      const { documentType, documentName, isRequired } = req.body;
-      const uploadedById = req.user?.userId;
-
-      if (!uploadedById) {
-        res.status(401).json({ error: 'Unauthorized' });
-        return;
-      }
-
-      if (!DOCUMENT_TYPES.includes(documentType)) {
-        res.status(400).json({ error: 'Invalid document type' });
-        return;
-      }
+      const { documentType: validatedType, documentName: validatedName, isRequired: validatedIsRequired } = validationResult.data;
 
       const document = await documentService.uploadDocument({
         loanId,
-        documentType,
-        documentName: documentName || req.file.originalname,
+        documentType: validatedType,
+        documentName: validatedName || req.file.originalname,
         filePath: `uploads/${req.file.filename}`,
         fileSize: req.file.size,
         mimeType: req.file.mimetype,
         uploadedById,
-        isRequired: isRequired === 'true',
+        isRequired: validatedIsRequired === true,
       });
 
+      logger.info('Document uploaded', { docId: document.id, loanId });
       res.status(201).json(document);
     } catch (error: any) {
       if (error.message === 'Loan not found') {
-        res.status(404).json({ error: error.message });
-      } else {
-        res.status(500).json({ error: 'Failed to upload document' });
+        throw new NotFoundError('Loan');
       }
+      throw error;
     }
   },
 
@@ -76,46 +73,44 @@ export const documentController = {
    * GET /api/loans/:id/documents
    */
   async listDocuments(req: Request, res: Response): Promise<void> {
-    try {
-      const loanId = req.params.id;
-      const documents = await documentService.listDocuments(loanId);
-      res.json(documents);
-    } catch (error) {
-      res.status(500).json({ error: 'Failed to fetch documents' });
-    }
+    const loanId = req.params.id;
+    const documents = await documentService.listDocuments(loanId);
+    res.json(documents);
   },
 
   /**
    * POST /api/documents/:docId/verify
    */
   async verifyDocument(req: Request, res: Response): Promise<void> {
+    const docId = req.params.docId;
+    const verifiedById = req.user?.userId;
+
+    if (!verifiedById) {
+      throw new AuthenticationError('Unauthorized');
+    }
+
+    const validationResult = VerifyDocumentSchema.safeParse(req.body);
+
+    if (!validationResult.success) {
+      throw new ValidationError('Document verification validation failed',
+        validationResult.error.flatten().fieldErrors as Record<string, any>);
+    }
+
+    const { verificationStatus } = validationResult.data;
+
     try {
-      const docId = req.params.docId;
-      const { verificationStatus } = req.body;
-      const verifiedById = req.user?.userId;
-
-      if (!verifiedById) {
-        res.status(401).json({ error: 'Unauthorized' });
-        return;
-      }
-
-      if (!VERIFICATION_STATUSES.includes(verificationStatus)) {
-        res.status(400).json({ error: 'Invalid verification status' });
-        return;
-      }
-
       const document = await documentService.verifyDocument(docId, {
         verifiedById,
         verificationStatus,
       });
 
+      logger.info('Document verified', { docId, status: verificationStatus });
       res.json(document);
     } catch (error: any) {
       if (error.message === 'Document not found') {
-        res.status(404).json({ error: error.message });
-      } else {
-        res.status(500).json({ error: 'Failed to verify document' });
+        throw new NotFoundError('Document');
       }
+      throw error;
     }
   },
 
@@ -123,16 +118,17 @@ export const documentController = {
    * DELETE /api/documents/:docId
    */
   async deleteDocument(req: Request, res: Response): Promise<void> {
+    const docId = req.params.docId;
+
     try {
-      const docId = req.params.docId;
       await documentService.deleteDocument(docId);
+      logger.info('Document deleted', { docId });
       res.status(204).send();
     } catch (error: any) {
       if (error.message === 'Document not found') {
-        res.status(404).json({ error: error.message });
-      } else {
-        res.status(500).json({ error: 'Failed to delete document' });
+        throw new NotFoundError('Document');
       }
+      throw error;
     }
   },
 };

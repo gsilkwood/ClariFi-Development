@@ -79,21 +79,43 @@ export class LoanService {
   }
 
   /**
-   * Get all applications for a borrower
+   * Get all applications for a borrower with optional pagination
    */
-  static async getLoanApplicationsByUser(userId: string) {
+  static async getLoanApplicationsByUser(
+    userId: string,
+    skip: number = 0,
+    take: number = 10
+  ) {
     // First find borrower by email (need user email)
     const user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user) throw new Error('User not found');
 
+    // Get total count
+    const total = await prisma.loanApplication.count({
+      where: {
+        borrower: { email: user.email },
+      },
+    });
+
+    // Get paginated applications
     const applications = await prisma.loanApplication.findMany({
       where: {
         borrower: { email: user.email },
       },
       orderBy: { createdAt: 'desc' },
+      skip,
+      take,
     });
 
-    return applications;
+    return {
+      data: applications,
+      pagination: {
+        total,
+        skip,
+        take,
+        pages: Math.ceil(total / take),
+      },
+    };
   }
 
   /**

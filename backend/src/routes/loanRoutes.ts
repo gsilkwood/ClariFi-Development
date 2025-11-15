@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { loanController } from '../controllers/loanController';
 import { authenticateToken } from '../middleware/auth';
+import { asyncHandler } from '../utils/asyncHandler';
 
 const router = Router();
 
@@ -8,27 +9,27 @@ const router = Router();
 router.use(authenticateToken);
 
 // Create new loan
-router.post('/', (req, res) => loanController.createLoan(req, res));
+router.post('/', asyncHandler((req, res) => loanController.createLoan(req, res)));
 
 // Get all user's loans
-router.get('/', (req, res) => loanController.getLoanApplications(req, res));
+router.get('/', asyncHandler((req, res) => loanController.getLoanApplications(req, res)));
 
 // Get specific loan
-router.get('/:id', (req, res) => loanController.getLoanApplication(req, res));
+router.get('/:id', asyncHandler((req, res) => loanController.getLoanApplication(req, res)));
 
 // Update loan
-router.put('/:id', (req, res) => loanController.updateLoan(req, res));
+router.put('/:id', asyncHandler((req, res) => loanController.updateLoan(req, res)));
 
 // Submit for review
-router.post('/:id/submit', (req, res) => loanController.submitForReview(req, res));
+router.post('/:id/submit', asyncHandler((req, res) => loanController.submitForReview(req, res)));
 
 // Get loan status
-router.get('/:id/status', (req, res) => loanController.getLoanStatus(req, res));
+router.get('/:id/status', asyncHandler((req, res) => loanController.getLoanStatus(req, res)));
 
 // Get status history
-router.get('/:id/history', (req, res) => loanController.getStatusHistory(req, res));
+router.get('/:id/history', asyncHandler((req, res) => loanController.getStatusHistory(req, res)));
 
 // Delete loan (draft only)
-router.delete('/:id', (req, res) => loanController.deleteLoan(req, res));
+router.delete('/:id', asyncHandler((req, res) => loanController.deleteLoan(req, res)));
 
 export default router;
